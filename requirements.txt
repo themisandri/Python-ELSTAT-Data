@@ -6,3 +6,4 @@ PyMySQL
 seaborn
 streamlit
 urllib3
+sqlalchemy

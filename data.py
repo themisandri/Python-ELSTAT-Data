@@ -4,6 +4,7 @@ import mysql.connector
 import pandas as pd
 from sqlalchemy import create_engine
 import pymysql
+import seaborn as sns
 
 
 book = xlrd.open_workbook("excel/Αφίξεις ανά μέσο 4ο 2011.xls")
@@ -12,7 +13,7 @@ book3 = xlrd.open_workbook("excel/Αφίξεις ανά μέσο 4ο 2013.xls")
 book4 = xlrd.open_workbook("excel/Αφίξεις ανά μέσο 4ο 2014.xls")
 book5 = xlrd.open_workbook("excel/Αφίξεις ανά μέσο 4ο 2015.xls")
 
-def get_tourists():
+def get_tourists(save_to_db=False):
     #Save the sheets to dataframes
     sheet = book.sheet_by_index(11)
     total2011 = sheet.cell(134, 6).value
@@ -29,33 +30,43 @@ def get_tourists():
     sheet5 = book5.sheet_by_index(11)
     total2015 = sheet5.cell(136, 6).value
 
-    # plot
-    plt.ticklabel_format(style='plain')
-    dev_x = [2011, 2012, 2013, 2014, 2015]
-    dev_y = [total2011, total2012, total2013, total2014, total2015]
-    plt.plot(dev_x, dev_y)
+    #create dataframe with total tourists per year
+    df = pd.DataFrame({'Year': [2011, 2012, 2013, 2014, 2015], 'Total': [total2011, total2012, total2013, total2014, total2015]})
+    #year column to datetime
+    df['Year'] = pd.to_datetime(df['Year'], format='%Y')
+
+    #plot the data in line chart and prevent scientific notation
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.plot(df['Year'], df['Total'])
+    ax.yaxis.get_major_formatter().set_scientific(False)
+    plt.xticks(rotation=45)
+    plt.title('Total tourists per year')
     plt.xlabel('Year')
-    plt.ylabel('Number of tourists')
-    plt.title('Tourists per Year')
-    plt.show()
+    plt.ylabel('Total tourists')
+    fig = plt.gcf()
 
-    #Store to database
-    database = mysql.connector.connect(host="localhost", user="root", passwd="", db="mysqlPython")
-    cursor = database.cursor()
-    query = 'INSERT INTO total (tourists,year) VALUES (%s,%s)'
-    records_to_insert = [(total2011, 2011),
-                         (total2012, 2012),
-                         (total2013, 2013),
-                         (total2014, 2014),
-                         (total2015, 2015)]
-    cursor.executemany(query, records_to_insert)
-    cursor.close()
 
-    # Commit the transaction
-    database.commit()
-    database.close()
+    if save_to_db == True:
+        #Store to database
+        database = mysql.connector.connect(host="localhost", user="root", passwd="", db="mysqlPython")
+        cursor = database.cursor()
+        query = 'INSERT INTO total (tourists,year) VALUES (%s,%s)'
+        records_to_insert = [(total2011, 2011),
+                            (total2012, 2012),
+                            (total2013, 2013),
+                            (total2014, 2014),
+                            (total2015, 2015)]
+        cursor.executemany(query, records_to_insert)
+        cursor.close()
 
-def per_country():
+        # Commit the transaction
+        database.commit()
+        database.close()
+
+    return fig
+
+def per_country(save_to_db=False):
     x2011 = pd.ExcelFile("excel/Αφίξεις ανά μέσο 4ο 2011.xls")
     x2012 = pd.ExcelFile("excel/Αφίξεις ανά μέσο 4ο 2012.xls")
     x2013 = pd.ExcelFile("excel/Αφίξεις ανά μέσο 4ο 2013.xls")
@@ -123,26 +134,46 @@ def per_country():
     val2015 = xwra2015.iloc[:, 0]
     total2015 = xwra2015.iloc[:, 1]
 
-    # create sqlalchemy engine
-    engine = create_engine("mysql+pymysql://{user}:{pw}@localhost/{db}"
-                           .format(user="root",
-                                   pw="",
-                                   db="mysqlPython"))
+    #add year column to dataframes
+    xwra2011['year'] = 2011
+    xwra2012['year'] = 2012
+    xwra2013['year'] = 2013
+    xwra2014['year'] = 2014
+    xwra2015['year'] = 2015
 
-    xwra2011.to_sql('countries', con=engine, if_exists='append', chunksize=1000)
-    xwra2012.to_sql('countries', con=engine, if_exists='append', chunksize=1000)
-    xwra2013.to_sql('countries', con=engine, if_exists='append', chunksize=1000)
-    xwra2014.to_sql('countries', con=engine, if_exists='append', chunksize=1000)
-    xwra2015.to_sql('countries', con=engine, if_exists='append', chunksize=1000)
+    if save_to_db == True:
+        # create sqlalchemy engine
+        engine = create_engine("mysql+pymysql://{user}:{pw}@localhost/{db}"
+                            .format(user="root",
+                                    pw="",
+                                    db="mysqlPython"))
 
-    # plot
+        xwra2011.to_sql('countries', con=engine, if_exists='append', chunksize=1000)
+        xwra2012.to_sql('countries', con=engine, if_exists='append', chunksize=1000)
+        xwra2013.to_sql('countries', con=engine, if_exists='append', chunksize=1000)
+        xwra2014.to_sql('countries', con=engine, if_exists='append', chunksize=1000)
+        xwra2015.to_sql('countries', con=engine, if_exists='append', chunksize=1000)
+
     frames = [xwra2011, xwra2012, xwra2013, xwra2014, xwra2015]
     result = pd.concat(frames)
-    result.plot(kind='scatter', x='total', y='countries', color='red')
+    result = result.reset_index(drop=True)
+    result['year'] = pd.to_datetime(result['year'], format='%Y')
+
+    #plot with seaborn
+    fig = plt.figure()
+    sns.set(style="whitegrid")
+    sns.set(rc={'figure.figsize': (11.7, 8.27)})
+    ax = sns.barplot(x="year", y="total", hue="countries", data=result)
+    plt.xticks(rotation=45)
+    ax.get_yaxis().get_major_formatter().set_scientific(False)
+    plt.title('Countries of origin with the largest share of tourist arrivals')
+    plt.xlabel('Year')
+    plt.ylabel('Total tourists')
     plt.show()
 
+    return fig
 
-def per_month():
+def per_month(save_to_db=False):
     jan11 = book.sheet_by_index(0)
     feb11 = book.sheet_by_index(1)
     mar11 = book.sheet_by_index(2)
@@ -230,43 +261,54 @@ def per_month():
                 (may15.cell(66, 6).value, may15.cell(1, 1).value), (jun15.cell(66, 6).value, jun15.cell(1, 1).value), (jul15.cell(66, 6).value, jul15.cell(1, 1).value), (aug15.cell(66, 6).value, aug15.cell(1, 1).value),
                 (sep15.cell(66, 6).value, sep15.cell(1, 1).value), (oct15.cell(66, 6).value, oct15.cell(1, 1).value), (nov15.cell(66, 6).value, nov15.cell(1, 1).value), (dec15.cell(66, 6).value, dec15.cell(1, 1).value)]
 
-    database = mysql.connector.connect(host="localhost", user="root", passwd="", db="mysqlPython")
-    cursor = database.cursor()
+    if save_to_db == True:
 
-    query = 'INSERT INTO months (total,month) VALUES (%s,%s)'
-    values = months11
-    cursor.executemany(query, values)
-    query = 'INSERT INTO months (total,month) VALUES (%s,%s)'
-    values = months12
-    cursor.executemany(query, values)
-    query = 'INSERT INTO months (total,month) VALUES (%s,%s)'
-    values = months13
-    cursor.executemany(query, values)
-    query = 'INSERT INTO months (total,month) VALUES (%s,%s)'
-    values = months14
-    cursor.executemany(query, values)
-    query = 'INSERT INTO months (total,month) VALUES (%s,%s)'
-    values = months15
-    cursor.executemany(query, values)
-    cursor.close()
+        database = mysql.connector.connect(host="localhost", user="root", passwd="", db="mysqlPython")
+        cursor = database.cursor()
 
-    # Commit the transaction
-    database.commit()
-    database.close()
+        query = 'INSERT INTO months (total,month) VALUES (%s,%s)'
+        values = months11
+        cursor.executemany(query, values)
+        query = 'INSERT INTO months (total,month) VALUES (%s,%s)'
+        values = months12
+        cursor.executemany(query, values)
+        query = 'INSERT INTO months (total,month) VALUES (%s,%s)'
+        values = months13
+        cursor.executemany(query, values)
+        query = 'INSERT INTO months (total,month) VALUES (%s,%s)'
+        values = months14
+        cursor.executemany(query, values)
+        query = 'INSERT INTO months (total,month) VALUES (%s,%s)'
+        values = months15
+        cursor.executemany(query, values)
+        cursor.close()
+
+        # Commit the transaction
+        database.commit()
+        database.close()
 
     months = months11 + months12 + months13 + months14 + months15
     # plot
-    plt.ticklabel_format(style='plain')
+    #plt.ticklabel_format(style='plain')
 
     xs = [x[1] for x in months]
     ys = [x[0] for x in months]
     plt.xlabel('Month')
+    plt.xticks(rotation=90)
     plt.ylabel('Number of tourists')
     plt.title('Tourists per Month')
+    #size increase
+    plt.rcParams["figure.figsize"] = [16,9]
+    #gap between bars
+    plt.rcParams['xtick.major.pad']='8'
+    plt.plot(xs, ys, 'ro')
     plt.plot(xs, ys)
+    fig = plt.gcf()
     plt.show()
 
-def per_vehicle():
+    return fig
+
+def per_vehicle(save_to_db=False):
     x2011 = pd.ExcelFile("excel/Αφίξεις ανά μέσο 4ο 2011.xls")
     x2012 = pd.ExcelFile("excel/Αφίξεις ανά μέσο 4ο 2012.xls")
     x2013 = pd.ExcelFile("excel/Αφίξεις ανά μέσο 4ο 2013.xls")
@@ -308,37 +350,39 @@ def per_vehicle():
     vehicle2015.rename(
         columns={"Unnamed: 1": "countries", "Unnamed: 2": "plane", "Unnamed: 3": "train", "Unnamed: 4": "boat",
                  "Unnamed: 5": "car"}, inplace=True)
-    print(vehicle2011)
-    print(vehicle2012)
-    print(vehicle2013)
-    print(vehicle2014)
-    print(vehicle2015)
 
-    # create sqlalchemy engine
-    engine = create_engine("mysql+pymysql://{user}:{pw}@localhost/{db}"
-                           .format(user="root",
-                                   pw="",
-                                   db="mysqlPython"))
+    vehicle2011['year'] = pd.to_datetime(vehicle2011['year'], format='%Y')
+    vehicle2012['year'] = pd.to_datetime(vehicle2012['year'], format='%Y')
+    vehicle2013['year'] = pd.to_datetime(vehicle2013['year'], format='%Y')
+    vehicle2014['year'] = pd.to_datetime(vehicle2014['year'], format='%Y')
+    vehicle2015['year'] = pd.to_datetime(vehicle2015['year'], format='%Y')
 
-    vehicle2011.to_sql('vehicle', con=engine, if_exists='append', chunksize=1000, )
-    vehicle2012.to_sql('vehicle', con=engine, if_exists='append', chunksize=1000)
-    vehicle2013.to_sql('vehicle', con=engine, if_exists='append', chunksize=1000)
-    vehicle2014.to_sql('vehicle', con=engine, if_exists='append', chunksize=1000)
-    vehicle2015.to_sql('vehicle', con=engine, if_exists='append', chunksize=1000)
+    if save_to_db == True:
+
+        # create sqlalchemy engine
+        engine = create_engine("mysql+pymysql://{user}:{pw}@localhost/{db}"
+                            .format(user="root",
+                                    pw="",
+                                    db="mysqlPython"))
+
+        vehicle2011.to_sql('vehicle', con=engine, if_exists='append', chunksize=1000, )
+        vehicle2012.to_sql('vehicle', con=engine, if_exists='append', chunksize=1000)
+        vehicle2013.to_sql('vehicle', con=engine, if_exists='append', chunksize=1000)
+        vehicle2014.to_sql('vehicle', con=engine, if_exists='append', chunksize=1000)
+        vehicle2015.to_sql('vehicle', con=engine, if_exists='append', chunksize=1000)
 
     # plot
     frames = [vehicle2011, vehicle2012, vehicle2013, vehicle2014, vehicle2015]
     result = pd.concat(frames)
 
     result.plot(x='year', y='plane', color='red')
+    fig1 = plt.gcf()
     result.plot(x='year', y='train', color='red')
+    fig2 = plt.gcf()
     result.plot(x='year', y='boat', color='red')
+    fig3 = plt.gcf()
     result.plot(x='year', y='car', color='red')
-    plt.suptitle('Categorical Plotting')
+    fig4 = plt.gcf()
     plt.show()
 
-
-get_tourists()
-per_country()
-per_vehicle()
-per_month()
+    return fig1, fig2, fig3, fig4

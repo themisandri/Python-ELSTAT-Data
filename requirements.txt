@@ -1,0 +1,8 @@
+xlrd
+matplotlib
+pandas
+mysql-connector-python
+PyMySQL
+seaborn
+streamlit
+urllib

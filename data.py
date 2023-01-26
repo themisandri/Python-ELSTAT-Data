@@ -289,8 +289,6 @@ def per_month(save_to_db=False):
 
     months = months11 + months12 + months13 + months14 + months15
     # plot
-    #plt.ticklabel_format(style='plain')
-
     xs = [x[1] for x in months]
     ys = [x[0] for x in months]
     plt.xlabel('Month')
@@ -303,10 +301,10 @@ def per_month(save_to_db=False):
     plt.rcParams['xtick.major.pad']='8'
     plt.plot(xs, ys, 'ro')
     plt.plot(xs, ys)
-    fig = plt.gcf()
+    fig_month = plt.gcf()
     plt.show()
 
-    return fig
+    return fig_month
 
 def per_vehicle(save_to_db=False):
     x2011 = pd.ExcelFile("excel/Αφίξεις ανά μέσο 4ο 2011.xls")
